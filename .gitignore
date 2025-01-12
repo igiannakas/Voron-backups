@@ -7,4 +7,3 @@ printer-[0-9]*_[0-9]*.cfg
 *.bkp
 *.csv
 *.zip
-.DS_Store
