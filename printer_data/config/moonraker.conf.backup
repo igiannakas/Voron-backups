@@ -167,12 +167,3 @@ path: /home/pi/chopper-resonance-tuner
 origin: https://github.com/MRX8024/chopper-resonance-tuner.git
 primary_branch: main
 managed_services: klipper
-[update_manager crowsnest]
-type: git_repo
-path: ~/crowsnest
-origin: https://github.com/mainsail-crew/crowsnest.git
-primary_branch: v5
-managed_services: crowsnest
-system_dependencies: system-dependencies.json
-virtualenv: ~/crowsnest-env
-requirements: requirements.txt

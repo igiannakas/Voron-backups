@@ -23,16 +23,22 @@
 ####    http://<ip>:<port>/?action=[stream/snapshot]            #####
 ####                                                            #####
 #####################################################################
+####    RTSP Stream URL: ( if enabled and supported )           #####
+####    rtsp://<ip>:<rtsp_port>/stream.h264                     #####
+#####################################################################
 
 
 [crowsnest]
+log_path: /home/pi/printer_data/logs/crowsnest.log
 log_level: verbose                      # Valid Options are quiet/verbose/debug
-rollover_on_start: true                # Creates a backup and clears the log on every restart, if set to true
+delete_log: true                       # Deletes log on every restart, if set to true
 no_proxy: true
 
 [cam 1]
-mode: ustreamer                         # https://docs.mainsail.xyz/crowsnest/faq/backends
+mode: ustreamer                         # ustreamer - Provides mjpg and snapshots. (All devices)
                                         # camera-streamer - Provides webrtc, mjpg and snapshots. (rpi + Raspi OS based only)
+enable_rtsp: false                      # If camera-streamer is used, this enables also usage of an rtsp server
+rtsp_port: 8554                         # Set different ports for each device!
 port: 8080                              # HTTP/MJPG Stream/Snapshot Port
 device: /dev/video0                     # See Log for available ...
 resolution: 1280x960                     # widthxheight format
