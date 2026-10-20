@@ -475,7 +475,7 @@ CONFIG_PARAM_EFFECT_LOADING_EXTRUDER="mmu_blue_clockwise_slow,   (0, 0, 1)" #~DE
 CONFIG_PARAM_EFFECT_UNLOADING="mmu_blue_anticlock_fast,   (0, 0, 0.4)" #~DEFAULT~#
 CONFIG_PARAM_EFFECT_UNLOADING_EXTRUDER="mmu_blue_anticlock_slow,   (0, 0, 1)" #~DEFAULT~#
 CONFIG_PARAM_EFFECT_CHECKING="mmu_breathing_white_fast,  (0.8, 0.8, 0.8)" #~DEFAULT~#
-CONFIG_PARAM_EFFECT_GATE_AVAILABLE="mmu_static_white_dim, (0.1, 0.1, 0.1)"
+CONFIG_PARAM_EFFECT_GATE_AVAILABLE="mmu_static_white_dim_unit0, (0.1, 0.1, 0.1)" #~DEFAULT~#
 CONFIG_PARAM_EFFECT_GATE_AVAILABLE_SEL="mmu_static_white_unit0,    (0.75, 0.75, 0.75)" #~DEFAULT~#
 CONFIG_PARAM_EFFECT_GATE_EMPTY_SEL="mmu_static_red_unit0,      (0.2, 0, 0)" #~DEFAULT~#
 CONFIG_PARAM_MISC_LED_EFFECTS="[mmu_led_effect mmu_static_white_unit0]\\nunit      : unit0\\ndefine_on : gates, exit\\nlayers    : static 0 0 top (1.0,1.0,1.0, 1.0)\\n\\n[mmu_led_effect mmu_static_white_dim_unit0]\\nunit      : unit0\\ndefine_on : gates, exit\\nlayers    : static 0 0 top (0.1,0.1,0.1, 0.1)\\n\\n[mmu_led_effect mmu_static_red_unit0]\\nunit      : unit0\\ndefine_on : gates, exit\\nlayers    : static 0 0 top (0.5,0.0,0.0)\\n\\n" #~DEFAULT~#
@@ -671,12 +671,11 @@ CONFIG_CHOICE_ENTRY_EFFECT_FILAMENT_COLOR=y #~DEFAULT~#
 CONFIG_PARAM_ENTRY_EFFECT="filament_color" #~DEFAULT~#
 CONFIG_PARAM_STATUS_EFFECT="filament_color" #~DEFAULT~#
 CONFIG_PARAM_LOGO_EFFECT="(0, 0, 0.3)" #~DEFAULT~#
-CONFIG_BOOL_CUSTOMIZE_LED_EFFECTS=y
+# CONFIG_BOOL_CUSTOMIZE_LED_EFFECTS is not set #~DEFAULT~#
 CONFIG_PARAM_WHITE_LIGHT="(1, 1, 1)" #~DEFAULT~#
 CONFIG_PARAM_BLACK_LIGHT="(.01, 0, .02)" #~DEFAULT~#
 CONFIG_PARAM_EMPTY_LIGHT="(0, 0, 0)" #~DEFAULT~#
 CONFIG_PARAM_FILAMENT_COLOR_INTENSITY=0.5 #~DEFAULT~#
-#       _
 CONFIG_PARAM_EFFECT_HEATING="mmu_breathing_red_slow,    (0.3, 0, 0)" #~DEFAULT~#
 CONFIG_PARAM_EFFECT_SELECTING="mmu_breathing_white_fast,  (0.2, 0.2, 0.2)" #~DEFAULT~#
 CONFIG_PARAM_EFFECT_PRELOADING="mmu_breathing_cyan_fast,   (0, 0.4, 0.5)" #~DEFAULT~#
