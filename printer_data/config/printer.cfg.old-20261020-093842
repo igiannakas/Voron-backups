@@ -1,0 +1,292 @@
+[include mmu/base/*.cfg]
+[include mmu/macros/*.cfg]
+[respond]
+#[include chopper_tune.cfg]
+#####################################################################
+#   Happy Hare includes
+#####################################################################
+[include mmu/base/*.cfg]
+
+#####################################################################
+#   File locations and on error handling
+#####################################################################
+
+[virtual_sdcard]
+path: /home/pi/printer_data/gcodes
+on_error_gcode: CANCEL_PRINT
+
+ 
+#####################################################################
+#   Printer mainboard and toolhead CAN ID's
+#####################################################################
+[mcu]
+canbus_uuid: c0f599d7bb14
+canbus_interface: can1
+
+[mcu toolhead_mcu]
+canbus_uuid: 559a518720ee 
+canbus_interface: can1
+
+#####################################################################
+#   Basic Klipper and Printer setup
+#####################################################################
+
+[printer]
+kinematics: corexy
+max_velocity: 600
+max_accel: 30000   	
+max_z_velocity: 35
+max_z_accel: 450	
+square_corner_velocity: 5
+minimum_cruise_ratio: 0.1
+
+[exclude_object]
+[print_stats]
+
+[gcode_arcs]
+resolution: 0.1
+
+[idle_timeout]
+timeout: 43200
+
+[force_move]
+enable_force_move: True
+
+
+#####################################################################
+#   Includes
+#####################################################################
+
+## Configuration files
+[include mainsail.cfg]
+[include config/toolhead_leds.cfg]
+[include config/extruder.cfg]
+[include config/steppers.cfg]
+[include config/temperature_sensors.cfg]
+[include config/homing.cfg]
+[include config/fans.cfg]
+[include config/disco.cfg]
+[include config/input_shaper.cfg]
+
+## Macros
+[include macros/stealthmax_macros.cfg]
+[include macros/movement_macros.cfg]
+[include macros/LED_macros.cfg]
+[include macros/printing_macros.cfg]
+[include macros/print_start_end.cfg]
+
+## Cartographer macro
+[include macros/cartographer_macros.cfg]
+
+## MMU Macros
+[include mmu/optional/client_macros.cfg]
+[include macros/custom_mmu_macros.cfg]
+
+[include macros/emu_macros.cfg]
+
+[auto_speed]
+max_missed: 8.00
+margin: 50
+derate: 0.7
+
+[gcode_macro DUMP_FLOWGUARD]
+description: Dump printer['mmu'].flowguard
+gcode:
+  {% set fg = printer['mmu'].flowguard %}
+  {action_respond_info("mmu.flowguard = " ~ fg|string)}
+
+
+[gcode_macro QUERY_HUMIDITY_SENSORS]
+description: Auto-detect humidity-capable sensors and report their readings
+gcode:
+  {% set ns = namespace(lines=[]) %}
+
+  # Loop over all printer objects; keep the ones that expose `.humidity`
+  {% for name in printer|sort %}
+    {% set obj = printer[name] %}
+    {% if obj.humidity is defined and obj.humidity is not none %}
+      {% if obj.temperature is defined and obj.temperature is not none %}
+        {% set ns.lines = ns.lines + [ "%s: %.2f°C  %.2f%%RH" % (name, obj.temperature, obj.humidity) ] %}
+      {% else %}
+        {% set ns.lines = ns.lines + [ "%s: %.2f%%RH" % (name, obj.humidity) ] %}
+      {% endif %}
+    {% endif %}
+  {% endfor %}
+
+  {% if ns.lines|length == 0 %}
+    {action_respond_info(
+      "No humidity-capable sensors found.\n"
+      "Tip: BME280/HTU21D/SHT3X typically appear as objects like:\n"
+      "  bme280 <name>, htu21d <name>, sht3x <name>\n"
+      "and expose `.humidity`."
+    )}
+  {% else %}
+    {action_respond_info("Humidity sensors:\n" ~ (ns.lines|join("\n")))}
+    {% if params.DISPLAY|default(0)|int == 1 %}
+      SET_DISPLAY_TEXT MSG="{ns.lines[0]}"
+    {% endif %}
+  {% endif %}
+
+
+
+#[display MMU_LANE_0]
+#lcd_type: ssd1306
+#i2c_mcu: mmu2
+#i2c_software_scl_pin: mmu2:PB3
+#i2c_software_sda_pin: mmu2:PB4
+#display_group: mmu_env
+
+
+#[display_data mmu_env line0]
+#position: 0,0
+#text:
+#  RH: { printer["bme280 Lane_0"].humidity|float|round(1) } %
+
+#[display_data mmu_env line1]
+#position: 1,0
+#text:
+#  Spool: { {0:'Empty',1:'Avail.',2:'Avail.',-1:'Unknown'}[printer.mmu.gate_status[0]|int] }
+
+# THIRD LINE → show only when gate 0 is selected; if Unloaded, show material instead
+#[display_data mmu_env line2]
+#position: 2,0
+#text:
+#  { "Fil: Loaded" if (printer.mmu.gate|int == 0 and printer.mmu.filament == 'Loaded')
+#    else ("Fil: " ~ (printer.mmu.gate_material[0]|default('—'))) }
+
+
+# LAST LINE → operation (if not empty) else print state; if both empty -> Idle; only when gate 0 selected, else "--"
+#[display_data mmu_env line3]
+#position: 3,0
+#text:
+#  { 
+#    (
+#      printer.mmu.operation
+#      if printer.mmu.operation
+#      else (
+#        printer.mmu.print_job_state
+#        if printer.mmu.print_job_state
+#        else (printer.mmu.print_state if printer.mmu.print_state else "Idle")
+#      )
+#    )
+#    if (printer.mmu.gate|int == 0) else "--"
+#  }
+
+
+
+[gcode_macro MMU_DEBUG]
+description: Show key MMU state in console
+gcode:
+  RESPOND MSG="Op: {printer.mmu.operation}"
+  RESPOND MSG="Gate: {printer.mmu.gate}"
+  RESPOND MSG="Print state: {printer.mmu.print_job_state}"
+  RESPOND MSG="Filament: {printer.mmu.filament}"
+  RESPOND MSG="Flow rate {printer.mmu.sync_feedback_flow_rate}"
+  RESPOND msg="Flowguard enabled: {printer.mmu.flowguard.enabled}"
+
+
+
+#####################################################################
+#   Stepper current delayed gcode and notification infrastructure
+#####################################################################
+
+[gcode_macro MR_NOTIFY]
+description: Allows you to send a custom notification via Mobileraker without using the M117 command
+gcode:
+    {% set msg = "MR_NOTIFY:" ~ (params.TITLE ~ "|" if 'TITLE' in params|upper else "") ~ params.MESSAGE %}
+
+    {% if 'MESSAGE' in params|upper %}
+        { action_respond_info(msg) }
+    {% else %}
+        { action_raise_error('Must provide MESSAGE parameter') }
+    {% endif %}
+
+[delayed_gcode INITIALISATION_MACROS] 
+initial_duration: 3
+gcode:
+  M84
+  REFRESH_SPOOLMAN
+  update_git
+  #LED_ON
+  LED_MID
+  M400
+
+[gcode_macro update_git]
+gcode:
+  RUN_SHELL_COMMAND CMD=update_git_script
+
+[gcode_shell_command update_git_script]
+command: bash -c "bash $HOME/klipper-backup/script.sh"
+timeout: 500.0
+verbose: False
+
+## Timelapse
+[include timelapse.cfg]
+
+#*# <---------------------- SAVE_CONFIG ---------------------->
+#*# DO NOT EDIT THIS BLOCK OR BELOW. The contents are auto-generated.
+#*#
+#*# [extruder]
+#*# control = pid
+#*# pid_kp = 27.812
+#*# pid_ki = 2.083
+#*# pid_kd = 92.821
+#*#
+#*# [heater_bed]
+#*# control = pid
+#*# pid_kp = 63.172
+#*# pid_ki = 4.342
+#*# pid_kd = 229.789
+#*#
+#*# [bed_mesh default]
+#*# version = 1
+#*# points =
+#*# 	-0.017085, -0.011053, -0.002633, 0.005655, 0.010438, 0.018677, 0.021052, 0.025695, 0.029147, 0.028067, 0.026884, 0.023325, 0.017593, 0.010329, 0.005655, -0.001430, -0.008536, -0.013357, -0.013357, -0.014562, -0.014668
+#*# 	-0.028771, -0.012148, 0.000973, 0.006744, 0.013911, 0.018677, 0.025591, 0.029256, 0.029149, 0.029149, 0.031517, 0.030223, 0.022138, 0.015105, 0.010440, 0.004351, -0.000227, -0.005139, -0.006235, -0.007438, -0.012040
+#*# 	-0.034961, -0.016979, -0.004924, 0.003156, 0.008047, 0.012719, 0.019760, 0.020948, 0.025591, 0.025699, 0.024513, 0.023325, 0.018678, 0.013911, 0.008158, 0.003262, -0.000228, -0.007330, -0.008641, -0.010835, -0.014454
+#*# 	-0.036286, -0.018187, -0.005140, -0.000227, 0.003264, 0.011525, 0.016297, 0.020842, 0.022138, 0.022138, 0.023326, 0.022246, 0.022138, 0.016187, 0.012719, 0.006746, -0.000227, -0.007438, -0.009843, -0.009843, -0.012254
+#*# 	-0.038509, -0.017086, -0.003830, 0.000867, 0.002171, 0.006744, 0.011633, 0.015105, 0.017379, 0.019868, 0.021057, 0.024405, 0.023325, 0.018569, 0.015105, 0.009137, 0.003262, -0.005032, -0.005032, -0.005139, -0.009629
+#*# 	-0.040951, -0.020605, -0.009843, -0.004924, -0.002628, 0.004460, 0.006854, 0.010332, 0.012828, 0.013913, 0.018570, 0.021057, 0.023218, 0.018678, 0.017379, 0.011526, 0.004351, -0.002628, -0.005032, -0.002628, -0.007329
+#*# 	-0.040951, -0.020498, -0.007438, -0.002628, -0.000333, 0.003262, 0.004460, 0.006746, 0.009137, 0.011526, 0.016297, 0.021057, 0.023218, 0.020842, 0.018678, 0.013913, 0.004569, -0.000227, -0.000227, -0.000227, -0.005032
+#*# 	-0.045843, -0.020605, -0.008641, -0.000333, -0.000334, -0.000333, -0.002628, 0.000867, 0.002066, 0.006746, 0.013913, 0.018678, 0.020949, 0.016297, 0.014997, 0.011526, 0.004351, -0.002628, -0.005032, -0.005032, -0.007438
+#*# 	-0.045843, -0.022811, -0.010941, -0.006235, -0.007438, -0.011048, -0.012040, -0.009629, -0.006235, -0.001534, 0.005657, 0.010332, 0.012828, 0.011526, 0.007941, 0.002066, -0.003830, -0.009843, -0.012040, -0.011048, -0.014668
+#*# 	-0.045626, -0.019290, -0.008534, -0.005032, -0.008536, -0.012148, -0.010941, -0.008534, -0.007438, -0.001534, 0.003262, 0.009137, 0.011526, 0.011526, 0.011526, 0.003262, -0.002628, -0.007329, -0.009736, -0.009843, -0.014668
+#*# 	-0.043396, -0.019396, -0.006233, -0.002628, -0.008534, -0.012254, -0.013354, -0.012254, -0.009736, -0.005032, -0.000227, 0.007941, 0.011526, 0.011526, 0.009354, 0.002172, -0.000439, -0.005032, -0.007438, -0.012254, -0.016871
+#*# 	-0.045843, -0.019504, -0.007438, -0.005032, -0.009736, -0.012254, -0.013247, -0.012254, -0.012254, -0.007438, -0.002628, 0.004351, 0.006854, 0.006746, 0.004351, -0.000227, -0.006235, -0.009843, -0.012254, -0.014561, -0.021706
+#*# 	-0.045843, -0.020605, -0.009736, -0.007438, -0.009843, -0.012254, -0.012254, -0.013461, -0.014561, -0.012147, -0.005032, -0.002628, 0.002172, 0.000867, -0.002628, -0.007438, -0.008534, -0.012147, -0.016978, -0.019397, -0.028987
+#*# 	-0.045843, -0.021814, -0.012040, -0.007438, -0.009843, -0.012254, -0.012254, -0.014668, -0.014668, -0.012147, -0.009843, -0.002734, -0.000227, -0.000227, -0.005032, -0.007438, -0.009843, -0.012254, -0.015770, -0.021706, -0.031419
+#*# 	-0.037397, -0.016978, -0.007438, -0.005032, -0.006235, -0.007438, -0.009843, -0.012040, -0.010941, -0.007438, -0.005032, 0.002172, 0.003262, 0.004351, 0.002172, -0.001427, -0.005032, -0.009843, -0.012254, -0.019290, -0.028987
+#*# 	-0.038509, -0.016871, -0.007438, -0.005032, -0.006235, -0.007438, -0.007438, -0.012040, -0.009843, -0.007220, -0.000333, 0.005657, 0.006854, 0.009137, 0.006746, 0.002172, -0.002628, -0.008534, -0.013354, -0.019290, -0.031419
+#*# 	-0.030095, -0.012254, -0.002628, -0.000227, -0.000227, -0.000227, -0.002628, -0.002628, -0.002734, 0.000867, 0.009137, 0.013913, 0.016297, 0.017379, 0.016297, 0.013913, 0.007941, 0.000867, -0.005032, -0.012147, -0.024131
+#*# 	-0.026557, -0.007438, 0.002172, 0.005657, 0.006854, 0.004569, 0.002172, -0.000227, -0.000227, 0.006963, 0.013913, 0.021057, 0.025593, 0.025593, 0.023326, 0.018678, 0.013913, 0.006746, -0.000227, -0.007438, -0.019290
+#*# 	-0.026557, -0.007438, 0.002066, 0.004569, 0.004351, 0.002172, -0.002628, -0.005032, -0.002628, 0.001960, 0.009137, 0.014997, 0.020949, 0.022138, 0.023218, 0.018678, 0.009246, 0.002066, -0.005032, -0.012254, -0.024131
+#*# 	-0.021706, -0.003936, 0.006854, 0.009137, 0.006746, 0.000867, -0.005032, -0.005032, -0.003936, 0.002066, 0.011526, 0.018678, 0.022030, 0.023326, 0.023218, 0.018678, 0.013804, 0.004351, -0.002628, -0.008534, -0.018187
+#*# 	-0.013461, -0.002628, 0.004460, 0.006854, 0.006746, 0.004351, 0.002172, -0.000227, -0.000227, 0.008050, 0.016297, 0.023434, 0.025593, 0.025808, 0.025593, 0.023326, 0.013913, 0.004569, -0.002628, -0.009843, -0.014668
+#*# min_x = 20.0
+#*# min_y = 22.0
+#*# max_x = 330.0
+#*# max_y = 330.0
+#*# x_count = 21
+#*# y_count = 21
+#*# mesh_x_pps = 0
+#*# mesh_y_pps = 0
+#*# algo = bicubic
+#*# tension = 0.2
+#*#
+#*# [cartographer]
+#*# z_backlash = 0.0111
+#*#
+#*# [cartographer scan_model default]
+#*# coefficients = 1.4012438716893931,1.8843489394301525,0.8444943212816718,0.35188080174582037,0.4890251507928447,0.7146631612569716,-0.3050750139653835,-0.7004114792378708,0.3706729993310006,0.45141800603405585
+#*# domain = 3.2083894613408933e-07,3.386309218042564e-07
+#*# z_offset = 0
+#*# reference_temperature = 26.7
+#*# software_version = 1.8.0b2
+#*# mcu_version = CARTOGRAPHER v4 6.2.0
+#*#
+#*# [cartographer touch_model default]
+#*# threshold = 2834
+#*# speed = 2
+#*# z_offset = -0.05
+#*# software_version = 1.8.0b2
+#*# mcu_version = CARTOGRAPHER v4 6.2.0
